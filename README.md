@@ -10,13 +10,17 @@ The core of this package includes two implementations of backtracking and the ab
 
 Here is an example of how to use this package:
 ```python
-from backtracker.search import recursive_search, iterative_search
+from backtracker.search import recursive_search, iterative_search, parallelized_search
 from backtracker.examples import NQueens
 
 empty = NQueens(6, tuple())
 
 isols = iterative_search(empty)
 rsols = recursive_search(empty)
+psols = parallelized_search(empty)
 
-print(isols, rsols)
+print(len(isols), len(rsols), len(psols))
 ```
+
+## Problem
+With iterative search, I am able to contain the size of backlog to ~30 states, but with parallelized search, despite having a footprint check, the backlog still sizes up to ~1100 states. This slows down parallelized search significantly.
