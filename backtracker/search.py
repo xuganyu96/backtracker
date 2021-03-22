@@ -1,33 +1,84 @@
 import typing as ty
+from collections import namedtuple
 from backtracker.backtrackable import Backtrackable
 
-def iterative_search(state: Backtrackable) -> ty.Set[Backtrackable]:
+
+Node = namedtuple("Node", ['depth', 'state'])
+
+
+def iterative_search(
+    states: ty.Union[Backtrackable, ty.Iterable[Backtrackable]],
+    dfs: bool = True, max_depth: int = None, n_sols: int = None
+    ) -> ty.Set[Backtrackable]:
     """Given a state, search all nodes that can be reached from the given state
     that are solutions
 
-    :param state: [description]
+    :param state: the initial set of nodes to start the search from. Can accept 
+    a single state or an iterable of states
     :type state: BackTrackable
-    :return: [description]
-    :rtype: ty.List[Backtrackable]
+    :param dfs: if True, search using DFS, otherwise search with BFS. DFS is 
+    recommended in most situations
+    :param max_depth: the maximal depth of search; if the next node is beyond 
+    the maximal depth, it will not be added into the backlog. If none is 
+    supplied, the search will go as deep as needed
+    :param n_sols: the maximal number of solutions found before the search is 
+    terminated. If none is supplied, all solutions will be found.
+    :return: A Pythonic set of Backtrackable state instances that are solutions
+    according to the user's implementation
     """
-    backlog: ty.List[Backtrackable] = [state]
+    if isinstance(states, Backtrackable):
+        states = [states]
+    
+    # Initialize the backlog with the input states
+    backlog = []
+    for s in states:
+        assert isinstance(s, Backtrackable), \
+            f"Expected to search Backtrackable, found {type(s)}"
+        backlog.append(Node(0, s))
+
     footprints: ty.Dict[Backtrackable, bool] = dict()
     solutions: ty.Set[Backtrackable] = set()
 
     while len(backlog) > 0:
+        print(f"Max depth in backlog is: {max([x.depth for x in backlog])}")
+        print(f"Backlog size is {len(backlog)}")
         current = backlog.pop()
 
-        if not footprints.get(current, False):
+        too_deep = False
+        if max_depth:
+            # If the current node's depth is at max_depth, then all its children
+            # are by definition greater than max_depth and thus not to be 
+            # searched
+            too_deep = current.depth >= max_depth
+        
+        if not footprints.get(current.state, False) and not too_deep:
             # If the current node is already in the footprints, then do not 
             # search; otherwise, add it to the footprints, and obtain all of its
             # immediate neighbors, some being solutions, and others being 
             # next node(s) to search
-            for next in current.next():
+            for next in current.state.next():
                 if next.is_solution() and not next in solutions:
                     solutions.add(next)
+
+                    # If the current solution count has reached the specified
+                    # number, terminate search and return solutions
+                    early_term = False
+                    if n_sols:
+                        early_term = len(solutions) >= n_sols
+                    if early_term:
+                        return solutions
                 elif not footprints.get(next, False):
-                    backlog.insert(0, next)
-            footprints[current] = True    
+                    if dfs:
+                        # If using DFS, then the children of the currently 
+                        # searched node will be searched first before other
+                        # nodes
+                        backlog.append(Node(current.depth+1, next))
+                    else:
+                        # Otherwise, will use BFS, which means all nodes of 
+                        # the same depth will be searched first before their 
+                        # children
+                        backlog.insert(0, Node(current.depth+1, next))
+            footprints[current.state] = True    
     
     return solutions
 
