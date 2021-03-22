@@ -1,6 +1,7 @@
 from collections import namedtuple
 import multiprocessing as mp
 import typing as ty
+import uuid
 from backtracker.backtrackable import Backtrackable
 
 
@@ -10,7 +11,7 @@ Node = namedtuple("Node", ['depth', 'state'])
 def parallelized_search(states,
     max_worker_count: int = 1) -> ty.Set[Backtrackable]:
     """Use multiprocessing to parallelize the search"""
-    def worker(backlog: mp.Queue, results: mp.Queue, 
+    def worker(wid, backlog: mp.Queue, results: mp.Queue, 
                wsize: mp.Value, wlock: mp.Lock,
                qsize: mp.Value, qlock: mp.Lock):
         """Takes two queues. Receive the state to search from backlog, then 
@@ -18,15 +19,19 @@ def parallelized_search(states,
         results, acquire the lock on the number of active workers and decrement 
         it before exiting
         """
+        current: Node = None
         qlock.acquire()
         try:
-            current: Node = backlog.get()
+            current: Node = backlog.get(timeout=1)
             qsize.value -= 1
+        except:
+            pass
         finally:
             qlock.release()
         
-        for next in current.state.next():
-            results.put(Node(current.depth+1, next))
+        if current:
+            for next in current.state.next():
+                results.put(Node(current.depth+1, next))
         
         wlock.acquire()
         try:
@@ -62,8 +67,9 @@ def parallelized_search(states,
         if not backlog.empty():
             wlock.acquire()
             try:
+                wid = str(uuid.uuid4())[:5]
                 mp.Process(target=worker, 
-                    args=(backlog, results, wsize, wlock, qsize, qlock)).start()
+                    args=(wid, backlog, results, wsize, wlock, qsize, qlock)).start()
                 wsize.value += 1
             finally:
                 wlock.release()
@@ -71,18 +77,22 @@ def parallelized_search(states,
         # Harvest the result
         while not results.empty():
             result: Node = results.get()
-            if result.state.is_solution() and result.state not in solutions:
+            if footprints.get(result.state, False):
+                continue
+            if result.state.is_solution():
                 solutions.add(result.state)
-            elif not footprints.get(result, False):
+            elif not footprints.get(result.state, False):
                 qlock.acquire()
                 try:
+                    # print(f"Add {result.state} to backlog")
                     backlog.put(result)
                     qsize.value += 1
-                    footprints[result] = True
+                    footprints[result.state] = True
                 finally:
                     qlock.release()
         
-        print(f"Backlog size: {qsize.value}, worker count: {wsize.value}")
+        if not (qsize.value == 0 and wsize.value > 0):
+            print(f"Backlog size: {qsize.value}, footprint size: {len(footprints)}")
 
     return solutions
 
@@ -120,8 +130,7 @@ def iterative_search(
     solutions: ty.Set[Backtrackable] = set()
 
     while len(backlog) > 0:
-        print(f"Max depth in backlog is: {max([x.depth for x in backlog])}")
-        print(f"Backlog size is {len(backlog)}")
+        print(f"Backlog size is {len(backlog)}, footprint size {len(footprints)}")
         current = backlog.pop()
 
         too_deep = False
