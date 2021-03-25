@@ -94,7 +94,7 @@ def parallelized_search(states,
 
     return solutions
 
-class TooManyBacktracks(Exception):
+class TooManyReverses(Exception):
     pass
 
 def iterative_search(
@@ -145,7 +145,7 @@ def iterative_search(
         if current.depth < prior_depth:
             reverse_count += 1
         if max_reverse and reverse_count > max_reverse:
-            raise TooManyBacktracks()
+            raise TooManyReverses()
         prior_depth = current.depth
 
         # Check if we are going too deep based on max_depth
